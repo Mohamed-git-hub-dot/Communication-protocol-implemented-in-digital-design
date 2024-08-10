@@ -1,0 +1,182 @@
+
+module SYS_TOP #(
+  parameter DATA_WIDTH = 8,
+  parameter RF_ADDR = 4,
+  parameter DIV_RATIO_WIDTH = 5
+  )(
+  input RX_IN,RST,
+  input REF_CLK,UART_CLK,
+  input [7:0] UART_CONFIG,
+  output wire TX_OUT,framing_error,
+  output wire parity_error
+);
+
+wire [DATA_WIDTH-1:0] RX_P_DATA,SYNC_RX_P_DATA;
+wire RX_VALID,SYNC_RX_VALID;
+wire RST_SYNC,RST_SYNC_2;
+
+wire FIFO_FULL;
+wire [DATA_WIDTH-1:0] WR_DATA;
+wire WR_INC;
+wire ALU_OUT_VALID;
+wire [15:0] ALU_OUT;
+wire ALU_EN;
+wire [3:0] ALU_FUN;
+wire GATE_EN;
+wire RD_D_VALID;
+wire [DATA_WIDTH-1:0] RD_D,WR_D;
+wire [RF_ADDR-1:0] ADDR;
+wire WR_EN,RD_EN;
+
+wire ALU_CLK;
+wire TX_CLK,RX_CLK;
+
+wire [DATA_WIDTH-1:0] REG2,REG3;
+
+wire [DATA_WIDTH-1:0] OP_A,OP_B;
+
+wire [DATA_WIDTH-1:0] FIFO_DATA;
+wire FIFO_EMPTY;
+wire BUSY;
+wire RD_INC;
+
+
+DATA_SYNC INST_DATA(
+.CLK(REF_CLK),
+.RST(RST_SYNC),
+.unsync_bus(RX_P_DATA),
+.bus_enable(RX_VALID),
+.sync_bus(SYNC_RX_P_DATA),
+.enable_pulse(SYNC_RX_VALID)
+);
+
+RST_SYNC RST1(
+.CLK(REF_CLK),
+.RST(RST),
+.SYNC_RST(RST_SYNC)
+);
+
+RST_SYNC RST2(
+.CLK(UART_CLK),
+.RST(RST),
+.SYNC_RST(RST_SYNC_2)
+);
+
+SYS_CTRL CTRL(
+.CLK(REF_CLK),
+.RST(RST_SYNC),
+.FIFO_FULL(FIFO_FULL),
+.SYNC_RX_P_DATA(SYNC_RX_P_DATA),
+.SYNC_RX_VALID(SYNC_RX_VALID),
+.ALU_OUT_VALID(ALU_OUT_VALID),
+.ALU_OUT(ALU_OUT),
+.RD_D(RD_D),
+.RD_D_VALID(RD_D_VALID),
+.WR_EN(WR_EN),
+.RD_EN(RD_EN),
+.ADDR(ADDR),
+.WR_D(WR_D),
+.GATE_EN(GATE_EN),
+.ALU_EN(ALU_EN),
+.ALU_FUN(ALU_FUN),
+.WR_INC(WR_INC),
+.WR_DATA(WR_DATA)
+);
+
+CLK_GATING GATE(
+.CLK(REF_CLK),
+.CLK_EN(GATE_EN),
+.GATED_CLK(ALU_CLK)
+);
+
+CLK_DIV DIV(
+.i_ref_clk(UART_CLK),
+.i_rst_n(RST_SYNC_2),
+.i_clk_en(1'd1),
+.i_div_ratio(8'd4),
+.o_div_clk(RX_CLK)
+);
+
+CLK_DIV DIV2(
+.i_ref_clk(UART_CLK),
+.i_rst_n(RST_SYNC_2),
+.i_clk_en(1'd1),
+.i_div_ratio(REG3),
+.o_div_clk(TX_CLK)
+);
+
+RF REG(
+.CLK(REF_CLK),
+.RST(RST_SYNC),
+.WR_EN(WR_EN),
+.RD_EN(RD_EN),
+.PAR_EN(UART_CONFIG[0]),
+.PAR_TYP(UART_CONFIG[1]),
+.prescale(UART_CONFIG[6:2]),
+.address(ADDR),
+.WR_DATA(WR_D),
+.RD_DATA(RD_D),
+.RdData_valid(RD_D_VALID),
+.REG0(OP_A),
+.REG1(OP_B),
+.REG2(REG2),
+.REG3(REG3)
+);
+
+ALU CALC(
+.CLK(ALU_CLK),
+.RST(RST_SYNC),
+.A(OP_A),
+.B(OP_B),
+.ALU_FUN(ALU_FUN),
+.ENABLE(ALU_EN),
+.ALU_OUT(ALU_OUT),
+.OUT_VALID(ALU_OUT_VALID)
+);
+
+UART_TX TX(
+.CLK(TX_CLK),
+.RST(RST_SYNC_2),
+.PAR_DATA(FIFO_DATA),
+.DATA_VALID(!FIFO_EMPTY),
+.PAR_EN(REG2[0]),
+.PAR_TYP(REG2[1]),
+.TX_OUT(TX_OUT),
+.BUSY(BUSY)
+);
+
+UART_RX RX(
+.CLK(RX_CLK),
+.RST(RST_SYNC_2),
+.RX_IN(RX_IN),
+.PAR_EN(REG2[0]),
+.PAR_TYP(REG2[1]),
+.prescale(REG2[6:2]),
+.P_DATA(RX_P_DATA),
+.DATA_VALID(RX_VALID),
+.PAR_ERROR(parity_error),
+.STP_ERROR(framing_error)
+);
+
+PULSE_GEN GEN(
+.CLK(TX_CLK),
+.RST(RST_SYNC_2),
+.LVL_SIG(BUSY),
+.PULSE_SIG(RD_INC)
+);
+
+FIFO WRITE(
+.WR_CLK(REF_CLK),
+.WR_RST(RST_SYNC),
+.RD_CLK(TX_CLK),
+.RD_RST(RST_SYNC_2),
+.WR_INC(WR_INC),
+.RD_INC(RD_INC),
+.WR_DATA(WR_DATA),
+.RD_DATA(FIFO_DATA),
+.WR_FULL(FIFO_FULL),
+.RD_EMPTY(FIFO_EMPTY)
+);
+
+
+endmodule

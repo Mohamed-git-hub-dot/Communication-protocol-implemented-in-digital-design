@@ -1,0 +1,61 @@
+
+module FIFO #(
+  parameter DATA_WIDTH = 8
+  )(
+  input WR_CLK,WR_RST,
+  input RD_CLK,RD_RST,
+  input WR_INC,RD_INC,
+  input [DATA_WIDTH-1 : 0] WR_DATA,
+  output wire [DATA_WIDTH-1 : 0] RD_DATA,
+  output wire WR_FULL,RD_EMPTY
+  );
+  
+  wire [2:0] WR_ADDR,RD_ADDR;
+  wire [3:0] GRAY_WR_PTR,GRAY_RD_PTR;
+  wire [3:0] SYNC_GRAY_WR_PTR,SYNC_GRAY_RD_PTR;
+  
+  FIFO_MEM INST1(
+  .WR_CLK(WR_CLK),
+  .WR_DATA(WR_DATA),
+  .WR_INC(WR_INC),
+  .WR_FULL(WR_FULL),
+  .WR_ADDR(WR_ADDR),
+  .RD_ADDR(RD_ADDR),
+  .RD_DATA(RD_DATA)
+  );
+  
+  DF_SYNC INST2(
+  .CLK(WR_CLK),
+  .RST(WR_RST),
+  .IN(GRAY_RD_PTR),
+  .out(SYNC_GRAY_RD_PTR)
+  );
+  
+  DF_SYNC INST3(
+  .CLK(RD_CLK),
+  .RST(RD_RST),
+  .IN(GRAY_WR_PTR),
+  .out(SYNC_GRAY_WR_PTR)
+  );
+  
+  FIFO_WR INST4(
+  .WR_CLK(WR_CLK),
+  .WR_RST(WR_RST),
+  .WR_INC(WR_INC),
+  .GRAY_RD_PTR(SYNC_GRAY_RD_PTR),
+  .WR_ADDR(WR_ADDR),
+  .GRAY_WR_PTR(GRAY_WR_PTR),
+  .WR_FULL(WR_FULL)
+  );
+  
+  FIFO_RD INST5(
+  .RD_CLK(RD_CLK),
+  .RD_RST(RD_RST),
+  .RD_INC(RD_INC),
+  .GRAY_WR_PTR(SYNC_GRAY_WR_PTR),
+  .RD_ADDR(RD_ADDR),
+  .GRAY_RD_PTR(GRAY_RD_PTR),
+  .RD_EMPTY(RD_EMPTY)
+  );
+  
+endmodule
